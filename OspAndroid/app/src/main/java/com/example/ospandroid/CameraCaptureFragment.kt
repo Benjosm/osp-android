@@ -15,7 +15,7 @@ import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
 import com.example.ospandroid.databinding.FragmentCameraCaptureBinding\nimport com.example.ospandroid.metadata.MetadataCollectionTask
 import com.example.ospandroid.managers.LocationPermissionsManager
-import com.example.ospandroid.upload.UploadQueueTask
+import com.example.ospandroid.upload.UploadQueueTask\nimport com.example.ospandroid.TrustScoreCalculationTask
 import java.io.File
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
@@ -146,7 +146,7 @@ class CameraCaptureFragment : Fragment() {
     private fun takePhoto() {
         val imageCapture = imageCapture ?: return
 
-        // Collect metadata at the exact moment of capture\n        val metadata = try {\n            MetadataCollectionTask(requireContext()).collect()\n        } catch (e: Exception) {\n            Log.e(\"CameraCapture\", \"Metadata collection failed\", e)\n            null\n        }\n\n        // Create temporary file in app cache directory
+        // Collect metadata at the exact moment of capture\n        val metadata = try {\n            MetadataCollectionTask(requireContext()).collect()\n        } catch (e: Exception) {\n            Log.e("CameraCapture", "Metadata collection failed", e)\n            null\n        }\n\n        // Create temporary file in app cache directory
         val photoFile = File(
             requireContext().cacheDir,
             "IMG_${System.currentTimeMillis()}.jpg"
@@ -165,15 +165,61 @@ class CameraCaptureFragment : Fragment() {
             object : ImageCapture.OnImageSavedCallback {
                 override fun onImageSaved(output: ImageCapture.OutputFileResults) {
                     Log.d("CameraCapture", "Photo saved: ${photoFile.absolutePath}")
-                    // Associate metadata with captured photo\n                    metadata?.let { md ->\n                        try {\n                            // Save metadata to sidecar file\n                            val metadataFile = File(\n                                photoFile.parent,\n                                \"${photoFile.nameWithoutExtension}.metadata\"\n                            )\n                            metadataFile.writeText(\n                                \"timestamp=${md.timestamp}\\n\" +\n                                \"location=${md.location?.latitude},${md.location?.longitude}\"\n                            )\n                        } catch (e: Exception) {\n                            Log.e(\"CameraCapture\", \"Failed to save metadata\", e)\n                        }\n                    }\n                    // Add media to upload queue
+                    // Associate metadata with captured photo\n                    metadata?.let { md ->\n                        try {\n                            // Save metadata to sidecar file\n                            val metadataFile = File(\n                                photoFile.parent,\n                                \"${photoFile.nameWithoutExtension}.metadata\"\n                            )\n                            metadataFile.writeText(\n                                \"timestamp=${md.timestamp}\\n\" +\n                                \"location=${md.location?.latitude},${md.location?.longitude}\"\n                            )\n                        } catch (e: Exception) {\n                            Log.e("CameraCapture", "Failed to save metadata", e)\n                        }\n                    }\n                    // Add media to upload queue
 try {
-    UploadQueueTask.enqueue(requireContext(), photoFile.absolutePath, metadata)
+    UploadQueueTask.enqueue(
+        context = requireContext(), 
+        filePath = photoFile.absolutePath, 
+        metadata = metadata,
+        onUploadComplete = { uploadDurationMs ->
+            Log.d("CameraCapture", "Upload completed, duration: ${uploadDurationMs}ms")
+            
+            // Proceed with trust score calculation after successful upload
+            TrustScoreCalculationTask(
+                context = requireContext(),
+                onResult = { trustScore ->
+                    // Now launch confirmation UI with trust score and actual upload duration
+                    val intent = Intent(requireContext(), com.example.ospandroid.ui.ConfirmationActivity::class.java)
+                    intent.putExtra("trust_score", trustScore)
+                    intent.putExtra("upload_time_ms", uploadDurationMs)  // This is the actual duration in ms
+                    intent.putExtra("file_path", photoFile.absolutePath)
+                    intent.putExtra("file_size_bytes", photoFile.length())
+                    startActivity(intent)
+                },
+                onError = { exception ->
+                    Log.e("CameraCapture", "Trust score calculation failed", exception)
+                    // Still launch confirmation UI with N/A
+                    val intent = Intent(requireContext(), com.example.ospandroid.ui.ConfirmationActivity::class.java)
+                    intent.putExtra("trust_score", -1.0) // Indicate N/A
+                    intent.putExtra("upload_time_ms", uploadDurationMs)  // Still show actual upload time
+                    intent.putExtra("file_path", photoFile.absolutePath)
+                    intent.putExtra("file_size_bytes", photoFile.length())
+                    startActivity(intent)
+                }
+            ).execute(photoFile.absolutePath)
+        },
+        onUploadFailed = { exception ->
+            Log.e("CameraCapture", "Upload failed: ${exception.message}")
+            // Launch confirmation UI with N/A values
+            val intent = Intent(requireContext(), com.example.ospandroid.ui.ConfirmationActivity::class.java)
+            intent.putExtra("trust_score", -1.0) // Indicate N/A
+            intent.putExtra("upload_time_ms", -1L) // Indicate upload failed
+            intent.putExtra("file_path", photoFile.absolutePath)
+            intent.putExtra("file_size_bytes", photoFile.length())
+            startActivity(intent)
+        }
+    )
     Log.d("CameraCapture", "Media enqueued for upload: ${photoFile.absolutePath}")
 } catch (e: Exception) {
     Log.e("CameraCapture", "Failed to enqueue media for upload", e)
-    // TODO: Consider user feedback for upload failures
+    // Launch confirmation UI with N/A values
+    val intent = Intent(requireContext(), com.example.ospandroid.ui.ConfirmationActivity::class.java)
+    intent.putExtra("trust_score", -1.0) // Indicate N/A
+    intent.putExtra("upload_time_ms", -1L) // Indicate upload failed
+    intent.putExtra("file_path", photoFile.absolutePath)
+    intent.putExtra("file_size_bytes", photoFile.length())
+    startActivity(intent)
 }
-// Further handling (e.g., show confirmation) could go here
                 }
 
                 override fun onError(exception: ImageCaptureException) {
