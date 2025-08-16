@@ -1,4 +1,0 @@
-<resources>
-    <string name="app_name">OspAndroid</string>
-    <string name="google_web_client_id" translatable="false">YOUR_WEB_CLIENT_ID_HERE</string>
-</resources>

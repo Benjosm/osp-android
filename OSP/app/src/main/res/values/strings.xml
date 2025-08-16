@@ -1,0 +1,7 @@
+<resources>
+    <string name="app_name">OSP</string>
+    <string name="google_web_client_id" translatable="false">259018273961-scm762v6hqhno0l75a2eqa5bnohapglm.apps.googleusercontent.com</string>
+    <string name="switch_camera">Switch Camera</string>
+    <string name="toggle_flash">Toggle Flash</string>
+    <string name="capture_photo">Capture Photo</string>
+</resources>
