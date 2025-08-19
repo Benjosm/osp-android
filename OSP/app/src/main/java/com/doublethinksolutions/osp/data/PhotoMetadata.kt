@@ -8,10 +8,10 @@ import android.location.Location
  * @property timestamp The Unix timestamp (in milliseconds) of when the capture was initiated.
  * @property location The last known device location. This can be null if location is unavailable
  *                    or permissions are not granted.
- * @property deviceOrientationDegrees The physical orientation of the device in degrees (0, 90, 180, 270).
+ * @property deviceOrientation The physical orientation of the device.
  */
 data class PhotoMetadata(
     val timestamp: Long,
     val location: Location?,
-    val deviceOrientationDegrees: Int
+    val deviceOrientation: DeviceOrientation?
 )

@@ -9,7 +9,7 @@ import retrofit2.converter.gson.GsonConverterFactory
 import java.util.concurrent.TimeUnit
 
 object NetworkClient {
-    private const val BASE_URL = "https://f05903b0bc52.ngrok-free.app/api/v1/"
+    private const val BASE_URL = "https:api.doublethinksolutions.com/api/v1/"
 
     // Hold the Retrofit instance
     private lateinit var retrofit: Retrofit

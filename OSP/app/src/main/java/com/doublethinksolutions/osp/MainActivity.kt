@@ -27,6 +27,8 @@ import androidx.credentials.GetCredentialRequest
 import androidx.credentials.GetCredentialResponse
 import androidx.credentials.exceptions.GetCredentialException
 import androidx.lifecycle.lifecycleScope
+import com.doublethinksolutions.osp.broadcast.AuthEvent
+import com.doublethinksolutions.osp.broadcast.AuthEventBus
 import com.doublethinksolutions.osp.managers.SessionManager
 import com.doublethinksolutions.osp.network.AuthService
 import com.doublethinksolutions.osp.ui.CameraScreen
@@ -36,6 +38,8 @@ import com.doublethinksolutions.osp.ui.theme.OSPTheme
 import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 
 sealed class UiState {
@@ -60,6 +64,9 @@ class MainActivity : ComponentActivity() {
 
         credentialManager = CredentialManager.create(this)
         sessionManager = SessionManager(applicationContext)
+
+        // Set up the listener for global authentication events.
+        listenForAuthEvents()
 
         setContent {
             OSPTheme {
@@ -110,6 +117,29 @@ class MainActivity : ComponentActivity() {
                     }
                 }
             }
+        }
+    }
+
+    /**
+     * Listens for global authentication events from the AuthEventBus.
+     * This is the crucial link between the network layer and the UI for handling auth failures.
+     */
+    private fun listenForAuthEvents() {
+        lifecycleScope.launch {
+            AuthEventBus.events.onEach { event ->
+                when (event) {
+                    is AuthEvent.AuthFailure -> {
+                        // The token refresh failed. The session is already cleared.
+                        // Forcibly navigate to the sign-in screen and inform the user.
+                        Toast.makeText(this@MainActivity, "Your session has expired. Please sign in again.", Toast.LENGTH_LONG).show()
+                        // Setting the state here ensures immediate navigation.
+                        uiState = UiState.NeedsSignIn
+                    }
+                    is AuthEvent.TokenRefreshed -> {
+                        // Handle manual retry logic if needed, otherwise ignore.
+                    }
+                }
+            }.launchIn(this)
         }
     }
 

@@ -5,7 +5,6 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.doublethinksolutions.osp.data.PhotoMetadata
-import com.doublethinksolutions.osp.tasks.TrustScoreCalculationTask
 import com.doublethinksolutions.osp.upload.UploadManager
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -43,9 +42,19 @@ class UploadViewModel : ViewModel() {
                 onProgress = { progress ->
                     updateUploadItem(newItem.id) { it.copy(status = UploadStatus.UPLOADING, progress = progress) }
                 },
-                onSuccess = { uploadDurationMs ->
-                    Log.d("ViewModel", "Upload success for ${newItem.fileName}")
-                    calculateTrustScore(context, photoFile, newItem.id, uploadDurationMs)
+                onSuccess = { responseData, uploadDurationMs ->
+                    Log.d("ViewModel", "Upload success for ${newItem.fileName}. Trust score from server: ${responseData.trust_score}")
+                    // Create the result object using data from the server response
+                    val result = UploadResult(
+                        trustScore = responseData.trust_score,
+                        uploadTimeMs = uploadDurationMs,
+                        fileSizeBytes = photoFile.length()
+                    )
+                    updateUploadItem(newItem.id) {
+                        it.copy(status = UploadStatus.SUCCESS, progress = 1f, result = result)
+                    }
+                    // Schedule item to be moved to history after a delay
+                    scheduleForArchival(newItem.id)
                 },
                 onFailure = { exception ->
                     Log.e("ViewModel", "Upload failed for ${newItem.fileName}", exception)
@@ -59,39 +68,8 @@ class UploadViewModel : ViewModel() {
         }
     }
 
-    private fun calculateTrustScore(context: Context, photoFile: File, itemId: String, uploadDurationMs: Long) {
-        TrustScoreCalculationTask(
-            context = context,
-            onResult = { trustScore ->
-                val result = UploadResult(
-                    trustScore = trustScore,
-                    uploadTimeMs = uploadDurationMs,
-                    fileSizeBytes = photoFile.length()
-                )
-                updateUploadItem(itemId) {
-                    it.copy(status = UploadStatus.SUCCESS, progress = 1f, result = result)
-                }
-                scheduleForArchival(itemId)
-            },
-            onError = { exception ->
-                Log.e("ViewModel", "Trust score calculation failed", exception)
-                val result = UploadResult(
-                    trustScore = -1.0, // Indicate N/A
-                    uploadTimeMs = uploadDurationMs,
-                    fileSizeBytes = photoFile.length()
-                )
-                updateUploadItem(itemId) {
-                    it.copy(
-                        status = UploadStatus.SUCCESS, // Still a success from upload perspective
-                        progress = 1f,
-                        result = result,
-                        errorMessage = "Trust score failed."
-                    )
-                }
-                scheduleForArchival(itemId)
-            }
-        ).execute(photoFile.absolutePath)
-    }
+    // The entire trust score calculation method is removed.
+    // private fun calculateTrustScore(...) { ... }
 
     private fun scheduleForArchival(itemId: String) {
         viewModelScope.launch {

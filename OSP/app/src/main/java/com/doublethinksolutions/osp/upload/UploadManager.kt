@@ -5,6 +5,7 @@ import android.os.Build
 import android.util.Log
 import com.doublethinksolutions.osp.broadcast.AuthEvent
 import com.doublethinksolutions.osp.broadcast.AuthEventBus
+import com.doublethinksolutions.osp.data.DeviceOrientation
 import com.doublethinksolutions.osp.data.PhotoMetadata
 import com.doublethinksolutions.osp.network.NetworkClient
 import com.google.gson.Gson
@@ -25,6 +26,20 @@ import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
 
+/**
+ * Data class to model the JSON response from the backend upon successful upload.
+ */
+data class UploadResponse(
+    val id: String,
+    val capture_time: String,
+    val lat: Double,
+    val lng: Double,
+    val orientation: DeviceOrientation,
+    val trust_score: Double,
+    val user_id: String,
+    val file_path: String
+)
+
 object UploadManager {
     private const val TAG = "UploadManager"
     private val gson = Gson()
@@ -36,7 +51,7 @@ object UploadManager {
         val capture_time: String,
         val lat: Double,
         val lng: Double,
-        val orientation: Int
+        val orientation: DeviceOrientation
     )
 
     suspend fun upload(
@@ -44,7 +59,7 @@ object UploadManager {
         file: File,
         metadata: PhotoMetadata?,
         onProgress: (Float) -> Unit,
-        onSuccess: (Long) -> Unit,
+        onSuccess: (responseData: UploadResponse, durationMs: Long) -> Unit,
         onFailure: (Exception) -> Unit
     ) {
         // We'll wrap the core logic to allow for a single retry.
@@ -97,7 +112,7 @@ object UploadManager {
         file: File,
         metadata: PhotoMetadata?,
         onProgress: (Float) -> Unit,
-        onSuccess: (Long) -> Unit,
+        onSuccess: (responseData: UploadResponse, durationMs: Long) -> Unit,
         onFailure: (Exception) -> Unit
     ) {
         val uploadStartTimestamp = System.currentTimeMillis()
@@ -125,15 +140,15 @@ object UploadManager {
                 // Extract lat/lng, providing 0.0 as a fallback if location is null
                 lat = photoMetadata.location?.latitude ?: 0.0,
                 lng = photoMetadata.location?.longitude ?: 0.0,
-                // Map the orientation field name
-                orientation = photoMetadata.deviceOrientationDegrees
+                orientation = photoMetadata.deviceOrientation ?: DeviceOrientation(0f,0f,0f)
             )
 
             // Serialize the *new* DTO object, not the original PhotoMetadata
             gson.toJson(uploadMetadata).toRequestBody("application/json".toMediaTypeOrNull())
         }
 
-        val fileRequestBody = file.asProgressRequestBody("image/jpeg".toMediaTypeOrNull()) { progress ->
+        val mimeType = getMimeType(file)
+        val fileRequestBody = file.asProgressRequestBody(mimeType.toMediaTypeOrNull()) { progress ->
             onProgress(progress)
         }
         val filePart = MultipartBody.Part.createFormData("file", file.name, fileRequestBody)
@@ -142,16 +157,33 @@ object UploadManager {
         val response = NetworkClient.mediaApiService.uploadMedia(filePart, metadataRequestBody)
 
         if (response.isSuccessful) {
-            val uploadDurationMs = System.currentTimeMillis() - uploadStartTimestamp
-            Log.d(TAG, "Upload successful for ${file.name} in $uploadDurationMs ms.")
-            withContext(Dispatchers.Main) {
-                onSuccess(uploadDurationMs)
+            val responseData = response.body()
+            if (responseData != null) {
+                val uploadDurationMs = System.currentTimeMillis() - uploadStartTimestamp
+                Log.d(TAG, "Upload successful for ${file.name} in $uploadDurationMs ms.")
+                withContext(Dispatchers.Main) {
+                    onSuccess(responseData, uploadDurationMs)
+                }
+            } else {
+                // Handle cases like a 204 No Content or an empty body
+                val e = IOException("Upload succeeded but response body was null.")
+                Log.e(TAG, e.message, e)
+                withContext(Dispatchers.Main) { onFailure(e) }
             }
         } else {
             val errorBody = response.errorBody()?.string() ?: "Unknown error"
             // This is how we bubble up the error to the calling function's catch block
             throw IOException("Upload failed with code: ${response.code()}. Body: $errorBody")
         }
+    }
+}
+
+private fun getMimeType(file: File): String {
+    return when (file.extension.lowercase()) {
+        "jpg", "jpeg" -> "image/jpeg"
+        "png" -> "image/png"
+        "mp4" -> "video/mp4"
+        else -> "application/octet-stream" // A generic binary type
     }
 }
 

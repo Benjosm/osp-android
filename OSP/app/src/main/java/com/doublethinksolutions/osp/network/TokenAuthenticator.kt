@@ -84,6 +84,7 @@ class TokenAuthenticator(
         // If the refresh call failed (e.g., refresh token expired), clear the session and give up.
         runBlocking {
             sessionManager.clearSession()
+            AuthEventBus.postEvent(AuthEvent.AuthFailure)
         }
         return null // Giving up tells OkHttp to fail the original request.
     }

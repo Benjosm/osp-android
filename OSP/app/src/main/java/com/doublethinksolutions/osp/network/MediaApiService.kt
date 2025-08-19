@@ -1,5 +1,6 @@
 package com.doublethinksolutions.osp.network
 
+import com.doublethinksolutions.osp.upload.UploadResponse
 import okhttp3.MultipartBody
 import okhttp3.RequestBody
 import retrofit2.Response
@@ -27,5 +28,5 @@ interface MediaApiService {
     suspend fun uploadMedia(
         @Part file: MultipartBody.Part,
         @Part("metadata") metadata: RequestBody?
-    ): Response<Unit>
+    ): Response<UploadResponse>
 }

@@ -49,7 +49,6 @@ fun UploadStatusIndicator(
         modifier = modifier
     ) {
         Surface(
-            modifier = Modifier.animateContentSize(animationSpec = spring()),
             shape = RoundedCornerShape(16.dp),
             color = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f),
             tonalElevation = 8.dp,
@@ -57,7 +56,7 @@ fun UploadStatusIndicator(
         ) {
             Column(
                 modifier = Modifier
-                    .widthIn(min = 200.dp, max = 320.dp)
+                    .animateContentSize(animationSpec = spring())
                     .clickable { expanded = !expanded }
                     .padding(12.dp)
             ) {
