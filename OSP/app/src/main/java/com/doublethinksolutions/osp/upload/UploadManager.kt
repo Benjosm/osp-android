@@ -129,7 +129,7 @@ object UploadManager {
                 Instant.ofEpochMilli(photoMetadata.timestamp).toString()
             } else {
                 // Older devices: format manually to UTC ISO 8601
-                val sdf = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US)
+                val sdf = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ROOT)
                 sdf.timeZone = TimeZone.getTimeZone("UTC")
                 sdf.format(Date(photoMetadata.timestamp))
             }
